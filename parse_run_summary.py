@@ -40,38 +40,68 @@ def parse_read_summary(summary_path):
     
     return read_summary
 
-def parse_read_summary_detail(summary_path):
-    headers = []
-    lines = []
-    # Basic approach to parsing text between two specific lines
-    # described here: https://stackoverflow.com/a/7559542/780188
-    with open(summary_path) as summary:
-        for line in summary:
-            if re.match("^Read 1$", line):
-                break
-        for line in summary:
-            if re.match("^Read 2 \(I\)$", line):
-                break
-            print(line)
+#modular functions for detailed parse
+def parse_file(file_path):
+    list = []
+    start = 0
+    with open(file_path) as in_file:
+        for line in in_file:
+            if re.match("^Lane", line):
+                start = 1
+            if re.match("^Read", line) or re.match("^Extracted", line):
+                start = 0
+            if start == 1:
+                list.append(build_lines(line))
+    return list
 
-    read_summary_detail = []
-    for line in lines:
-        line_dict = {}
-        for idx, header in enumerate(headers):
-            if header == '':
-                read_summary_line_dict[header] = line[idx]
-            elif header == '':
-                read_summary_line_dict[header] = int(line[idx])
-            else:
-                read_summary_line_dict[header] = float(line[idx])
-        read_summary_detail.append(line_dict)
-    
-    return read_summary_detail
+#builds stripped list from line
+def build_lines(line):
+    header = re.split("\s*,", line.rstrip())
+    header = [x.lower().replace(" ", "_").replace("/","_") for x in header]
+    header = [x.replace("%>=q30", "percent_greater_than_q30") for x in header]
+    return header
+
+#structures list of data into lists containing lists for a read and the lanes of data
+def struct_read(list):
+    struct = []
+    temp_list = []
+    intial = False
+    for line in list:
+        if line[0] == "lane":
+            struct.append(temp_list)
+            temp_list = []
+        temp_list.append(line)
+    struct.append(temp_list)
+    del struct[0]
+    return struct
+
+#transposes lists for a read and lanes of data to match header with lane values
+def transpose(list_of):
+    dict = {}
+    index_list = []
+    transpose = map(list, zip(*list_of))
+    return transpose
+
+#from a transposed list, creates dictionary from lists taking first list element as key
+def struct_dict(list):
+    dict = {}
+    for line in list:
+        key = line.pop(0)
+        dict[key] = line 
+    return dict
+
+#create list of dictionaries from file path
+def parse_read_summary_detail(file_path):
+    list = []
+    stage = struct_read(parse_file(file_path))
+    for line in stage:
+        list.append(struct_dict(transpose(line)))
+    return list
 
 def main():
     summary_path = sys.argv[1]
-    read_summary = parse_read_summary(summary_path)
-    # parse_read_summary_detail(summary_path)
+    #read_summary = parse_read_summary(summary_path)
+    read_summary = parse_read_summary_detail(summary_path)
     print(json.dumps(read_summary))
     
 if __name__ == '__main__':
